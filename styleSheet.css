@@ -1,33 +1,41 @@
-body{
-  background-color: rgb(41, 41, 41);
-  color: whitesmoke;
-}
+
 *{
   margin: 0;
   padding: 0;
 }
+body{
+  background-color: rgb(41, 41, 41);
+  color: whitesmoke;
+}
 .navbar{
   background-color: bisque;
   color: gray;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  width: 100%;
-  position:sticky;
+  padding: 8px 12px;
+  position: sticky;
   top: 0;
+  overflow: hidden; 
 }
 .logo{
   display: inline-block;
+  padding-top: 5px;
 }
+
 
 .nav-links{
   float: right;
+  vertical-align: middle;
 }
-
 .button{
   display: inline-block;
   margin: 0 5px;
   padding: 5px 15px;
   background-color: rgba(255, 124, 77, 0.884);
   color: rgb(48, 47, 47);
-  text-decoration: none;
+  border-radius: 6px;   
+}
+.welcome{
+  background-image: url(img.png);
+  background-size: cover;      
+  background-position: center;
+  height: 200px;
 }
