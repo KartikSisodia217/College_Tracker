@@ -282,3 +282,19 @@ section {
 .button-group .btn {
     margin-top: 0; 
 }
+
+
+.minimal-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    border-bottom: 1px solid transparent;
+    padding-bottom: 2px;
+}
+
+.minimal-link:hover {
+    color: var(--accent);
+    border-bottom: 1px solid var(--accent);
+}
