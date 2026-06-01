@@ -4,10 +4,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Attendance Tracker</title>
+  <title>College Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/png" href="assets/logo.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f1117">
 </head>
 
 <body>
@@ -20,11 +22,14 @@
   <div id="login_screen" class="login-screen hidden">
     <div class="login-box">
       <img src="assets/logo.png" alt="Logo" class="login-logo" onerror="this.style.display='none'">
-      <h1 class="login-title">Attendance Tracker</h1>
+      <h1 class="login-title">College Tracker</h1>
       <p class="login-tagline">Track smarter. Stress less.</p>
       <button class="google-btn" onclick="handle_auth_click()">
         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" class="google-icon">
         Continue with Google
+      </button>
+      <button id="guest_mode_btn" class="guest-btn" onclick="enter_guest_mode()">
+        Enter as Guest
       </button>
       <button id="install_help_btn" class="install-help-btn">
         How to Install App
@@ -32,9 +37,7 @@
       <div id="install_help_modal" class="install-help-modal">
         <div class="install-help-box">
           <button class="install-close-btn" onclick="close_install_help()">✖</button>
-
-          <h3>Install Attendance Tracker</h3>
-
+          <h3>Install College Tracker</h3>
           <div class="install-section">
             <strong>Android (Chrome/Brave/Opera)</strong>
             <p>
@@ -42,7 +45,6 @@
               Add to Home Screen / Install App
             </p>
           </div>
-
           <div class="install-section">
             <strong>iPhone (Safari)</strong>
             <p>
@@ -61,30 +63,53 @@
 
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-text">Attendance Tracker</span>
-        
-        <button class="desktop-toggle-btn" onclick="toggle_desktop_sidebar()" title="Toggle Sidebar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <button class="mobile-close-btn" onclick="toggle_mobile_sidebar()">✖</button>
+        <img src="./assets/logo.png" alt="College Hub" class="app-logo">
+        <div class="brand-actions" style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
+          <button id="sidebar_settings_btn" class="desktop-toggle-btn settings-btn" style="margin-left: 0;" onclick="open_settings_modal()" title="Settings">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+          <button class="desktop-toggle-btn" style="margin-left: 0;" onclick="toggle_desktop_sidebar()" title="Toggle Sidebar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <button class="mobile-close-btn" style="margin-left: 0;" onclick="toggle_mobile_sidebar()">✖</button>
+        </div>
       </div>
 
       <div id="user_profile_container" class="user-profile">
         <div class="user-welcome" id="user_welcome_text">Welcome</div>
       </div>
 
+      <div class="module-switcher-container">
+        <div class="module-switcher">
+          <div class="switcher-slider" id="switcher_slider"></div>
+          <button class="switcher-btn active" data-target="module-attendance" onclick="switch_module('attendance')">Attendance</button>
+          <button class="switcher-btn" data-target="module-assignments" onclick="switch_module('assignments')">Assignments</button>
+        </div>
+      </div>
+
       <button class="btn" onclick="open_add_subject_modal()">
         <span>+</span> <span class="btn-text">Add Subject</span>
       </button>
 
-      <div class="section-title">Attendance Overview</div>
+      <div class="section-title">Overview</div>
       <div class="stats-list" id="stats_list_container"></div>
 
-      
-      <button class="user-logout-btn" onclick="handle_auth_click()" title="Logout">
+      <button id="sidebar_auth_action_btn" class="user-logout-btn" onclick="handle_auth_click()" title="Logout">
+        <img id="sidebar_google_icon" src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" class="sidebar-google-icon hidden">
+        <svg id="sidebar_logout_icon" class="logout-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+        <span id="sidebar_auth_action_text" class="btn-text">Logout</span>
+      </button>
+      <button id="guest_logout_btn" class="user-logout-btn guest-logout-btn hidden" onclick="exit_guest_mode()" title="Logout">
         <svg class="logout-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -96,32 +121,57 @@
     </aside>
 
     <main class="main-area">
-      <div class="toolbar">
-        <div style="display: flex; align-items: center;">
-          <button class="mobile-menu-btn" onclick="toggle_mobile_sidebar()">☰</button>
-          <div class="nav-controls desktop-nav-controls">
-            <button class="nav-btn" onclick="open_desktop_date_picker()">Choose Date</button>
-            <input
-              type="date"
-              id="desktop_date_selection"
-              class="desktop-date-picker-input"
-              onchange="handleDesktopDateChange(this.value)"
-            />
-            <button class="nav-btn" onclick="navigate_calendar_weeks(-1)">◀ Prev</button>
-            <button class="nav-btn" onclick="navigate_to_current_week()">Today</button>
-            <button class="nav-btn" onclick="navigate_calendar_weeks(1)">Next ▶</button>
-            <h2 id="current_week_display_label">May 2026</h2>
+
+      <div id="module-attendance" class="module-content active">
+        <div class="toolbar">
+          <div style="display: flex; align-items: center;">
+            <button class="mobile-menu-btn" onclick="toggle_mobile_sidebar()">☰</button>
+            <div class="nav-controls desktop-nav-controls">
+              <button class="nav-btn" onclick="open_desktop_date_picker()">Choose Date</button>
+              <input
+                type="date"
+                id="desktop_date_selection"
+                class="desktop-date-picker-input"
+                onchange="handleDesktopDateChange(this.value)"
+              />
+              <button class="nav-btn" onclick="navigate_calendar_weeks(-1)">◀ Prev</button>
+              <button class="nav-btn" onclick="navigate_to_current_week()">Today</button>
+              <button class="nav-btn" onclick="navigate_calendar_weeks(1)">Next ▶</button>
+              <h2 id="current_week_display_label">May 2026</h2>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="nav-btn" onclick="open_interface_modal('weekly_slot_modal')">+ Add Weekly Slot</button>
+            <button class="nav-btn" onclick="open_interface_modal('extra_class_modal')">+ Add Extra Class</button>
           </div>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="nav-btn" onclick="open_interface_modal('weekly_slot_modal')">+ Add Weekly Slot</button>
-          <button class="nav-btn" onclick="open_interface_modal('extra_class_modal')">+ Add Extra Class</button>
+
+        <div class="calendar-container">
+          <div class="calendar-header" id="calendar_header_container"></div>
+          <div class="calendar-body" id="calendar_body_container"></div>
         </div>
       </div>
 
-      <div class="calendar-container">
-        <div class="calendar-header" id="calendar_header_container"></div>
-        <div class="calendar-body" id="calendar_body_container"></div>
+      <div id="module-assignments" class="module-content hidden">
+        <div class="toolbar">
+          <div style="display: flex; align-items: center;">
+            <button class="mobile-menu-btn" onclick="toggle_mobile_sidebar()">☰</button>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="nav-btn" onclick="open_assignment_modal()">+ Add Assignment</button>
+          </div>
+        </div>
+
+        <div class="assignments-container">
+          <div class="assignments-section">
+            <h3 class="section-title">Pending Assignments</h3>
+            <div id="pending_assignments_list" class="assignments-list"></div>
+          </div>
+          <div class="assignments-section">
+            <h3 class="section-title">Completed Assignments</h3>
+            <div id="completed_assignments_list" class="assignments-list"></div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -217,6 +267,55 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="add_assignment_modal">
+    <div class="modal-box">
+      <div class="modal-title" id="assignment_modal_title">Add Assignment</div>
+      <form id="assignment_input_form">
+        <div class="form-group"><label>Name</label><input type="text" id="assignment_name_input" required></div>
+        <div class="form-group"><label>Subject</label><select id="assignment_subject_selection" required></select></div>
+        <div class="form-group">
+          <label>Priority</label>
+          <select id="assignment_priority_selection" required>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Due Date</label><input type="date" id="assignment_due_date_input" required></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="close_all_interface_modals()">Cancel</button>
+          <button type="submit" class="btn" id="assignment_submit_btn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="settings_modal">
+    <div class="modal-box">
+      <div class="modal-title">Application Settings</div>
+      <form id="settings_form">
+        <div class="form-group">
+          <label>Default Startup Page</label>
+          <select id="setting_default_module" required>
+            <option value="attendance">Attendance</option>
+            <option value="assignments">Assignments</option>
+          </select>
+        </div>
+        <div class="form-group mobile-only-setting">
+          <label>Open Sidebar on Startup (Mobile Only)</label>
+          <select id="setting_mobile_sidebar" required>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="close_all_interface_modals()">Cancel</button>
+          <button type="submit" class="btn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="custom_alert_modal" role="dialog" aria-modal="true" aria-labelledby="custom_alert_title">
     <div class="modal-box custom-dialog-box">
       <div class="modal-title" id="custom_alert_title">Notice</div>
@@ -234,6 +333,19 @@
       <div class="modal-actions custom-dialog-actions">
         <button type="button" class="btn btn-secondary" id="custom_confirm_cancel_button" onclick="cancel_custom_confirm()">Cancel</button>
         <button type="button" class="btn" id="custom_confirm_ok_button" onclick="confirm_custom_dialog()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="guest_upgrade_modal" role="dialog" aria-modal="true" aria-labelledby="guest_upgrade_title">
+    <div class="modal-box custom-dialog-box">
+      <div class="modal-title" id="guest_upgrade_title">Local data detected.</div>
+      <p class="custom-dialog-message">
+        Would you like to save your current data to your Google account?
+      </p>
+      <div class="modal-actions custom-dialog-actions">
+        <button type="button" class="btn btn-secondary" onclick="discard_guest_data_after_google_sign_in()">Discard Local Data</button>
+        <button type="button" class="btn" onclick="save_guest_data_to_google_account()">Save & Continue</button>
       </div>
     </div>
   </div>
