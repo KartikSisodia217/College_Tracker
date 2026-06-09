@@ -31,26 +31,37 @@
       <button id="guest_mode_btn" class="guest-btn" onclick="enter_guest_mode()">
         Enter as Guest
       </button>
-      <button id="install_help_btn" class="install-help-btn">
+      <button id="install_help_btn" class="install-help-btn hidden">
         How to Install App
       </button>
-      <div id="install_help_modal" class="install-help-modal">
+      <div id="install_help_modal" class="install-help-modal" role="dialog" aria-modal="true" aria-labelledby="install_help_title">
         <div class="install-help-box">
-          <button class="install-close-btn" onclick="close_install_help()">✖</button>
-          <h3>Install College Tracker</h3>
-          <div class="install-section">
-            <strong>Android (Chrome/Brave/Opera)</strong>
-            <p>
-              Open browser menu (⋮) →<br>
-              Add to Home Screen / Install App
+          <button class="install-close-btn" onclick="close_install_help()" aria-label="Close install instructions">✖</button>
+          <h3 id="install_help_title">Install College Tracker</h3>
+          <div id="install_android_content" class="install-platform-content hidden">
+            <p class="install-description">
+              Install the app directly on this device for faster access from your home screen.
+            </p>
+            <button type="button" id="install_app_btn" class="btn install-primary-btn" onclick="install_college_tracker_app()">Install App</button>
+            <p class="install-fallback-text">
+              If that does not work, open the browser menu (⋮), then choose "Add to Home Screen" and then "Install App".
             </p>
           </div>
-          <div class="install-section">
-            <strong>iPhone (Safari)</strong>
-            <p>
-              Share button →<br>
-              Add to Home Screen
-            </p>
+          <div id="install_ios_content" class="install-platform-content hidden">
+            <ol class="install-steps">
+              <li>
+                <span class="install-step-icon" aria-hidden="true">↑</span>
+                <span>Tap the Share button in Safari.</span>
+              </li>
+              <li>
+                <span class="install-step-icon" aria-hidden="true">+</span>
+                <span>Select "Add to Home Screen".</span>
+              </li>
+              <li>
+                <span class="install-step-icon" aria-hidden="true">✓</span>
+                <span>Tap "Add".</span>
+              </li>
+            </ol>
           </div>
         </div>
       </div>

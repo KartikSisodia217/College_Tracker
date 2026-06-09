@@ -1111,15 +1111,13 @@ body {
   display: none;
 }
 
+.install-help-btn:not(.hidden) {
+  display: block;
+}
+
 .install-help-btn:hover {
   background: var(--bg);
   color: var(--text);
-}
-
-@media (max-width: 1000px) {
-  .install-help-btn {
-    display: block;
-  }
 }
 
 .install-help-modal {
@@ -1144,7 +1142,7 @@ body {
 
 .install-help-box {
   width: 90%;
-  max-width: 320px;
+  max-width: 340px;
   background: var(--bg-sec);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -1158,20 +1156,63 @@ body {
   color: var(--accent);
 }
 
-.install-section {
-  margin-bottom: 18px;
+.install-platform-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.install-section strong {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--text);
-}
-
-.install-section p {
+.install-description {
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.6;
+}
+
+.install-fallback-text {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.install-primary-btn {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.install-primary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.install-steps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.install-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.install-step-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .install-close-btn {
@@ -1183,6 +1224,16 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   font-size: 16px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+}
+
+.install-close-btn:hover,
+.install-close-btn:focus-visible {
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
 }
 
 @media (display-mode: standalone) {
@@ -1423,4 +1474,28 @@ body {
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
   cursor: pointer;
+}
+/* Scrollbar Styling */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #161b2c;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #7c5cff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) #161b2c;
 }
