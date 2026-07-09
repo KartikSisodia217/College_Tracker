@@ -12,6 +12,22 @@
   --font: 'Inter', sans-serif;
 }
 
+/* Light theme overrides. Same layout, spacing, typography, and purple
+   accent as the dark theme -- only the surface/text colors change. */
+body.theme-light {
+  --bg: #f4f5f9;
+  --bg-sec: #ffffff;
+  --border: #e1e3ea;
+  --text: #1b1d26;
+  --text-muted: #6b7280;
+  --accent: #7c5cff;
+  --accent-hover: #6a4ee0;
+}
+
+body.theme-light input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -378,16 +394,29 @@ body {
   z-index: 5;
   overflow: hidden;
   position: relative;
+  min-width: 0;
 }
 
 .lecture-info {
   font-size: 11px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .lecture-info strong {
   font-size: 12px;
+}
+
+.lecture-subject-name-truncated {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  color: var(--text-muted);
 }
 
 .attendance-controls {
@@ -517,6 +546,7 @@ body {
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.6;
+  white-space: pre-line;
 }
 
 .custom-dialog-actions {
@@ -762,6 +792,10 @@ body {
     padding-bottom: 10px;
   }
 
+  .reminder-banner-container.has-reminders {
+    display: block;
+  }
+
   .calendar-container {
     border: none;
     background: var(--bg);
@@ -887,6 +921,78 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+/* Subtle text link placed below the Logout button. Not a primary action. */
+.report-issue-link {
+  display: block;
+  text-align: center;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.report-issue-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.sidebar.collapsed .report-issue-link {
+  display: none !important;
+}
+
+/* Assignment reminder banner: mobile-only, shown when reminders exist. */
+.reminder-banner-container {
+  display: none;
+}
+
+.reminder-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(243, 156, 18, 0.12);
+  border: 1px solid rgba(243, 156, 18, 0.35);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+/* Overdue reminders get stronger visual emphasis than upcoming reminders,
+   reusing the same danger color already used elsewhere for overdue state. */
+.reminder-banner.overdue {
+  background: rgba(231, 76, 60, 0.12);
+  border: 1px solid var(--absent);
+  color: var(--absent);
+  font-weight: 700;
+}
+
+.reminder-banner-text {
+  flex: 1;
+}
+
+.reminder-banner-close {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 0 0 10px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.reminder-banner-close:hover {
+  opacity: 1;
 }
 
 .login-screen {
@@ -1483,19 +1589,19 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 ::-webkit-scrollbar-track {
-  background: #161b2c;
+  background: var(--bg-sec);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--border);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #7c5cff;
+  background: var(--accent);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) #161b2c;
+  scrollbar-color: var(--border) var(--bg-sec);
 }

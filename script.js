@@ -22,8 +22,30 @@ import {
 const GUEST_STORAGE_KEY = 'college_tracker_guest_data_v1';
 const GUEST_SESSION_KEY = 'college_tracker_guest_session_active';
 
+// Session-only flag (not persisted): tracks whether the user has dismissed
+// the reminder banner for the current session. Resets on reload/reopen.
+let reminder_banner_dismissed_this_session = false;
+
 function create_default_user_preferences() {
-  return { default_module: 'attendance', open_sidebar_on_startup: true };
+  return {
+    default_module: 'attendance',
+    open_sidebar_on_startup: true,
+    assignment_reminder_days: 3,
+    theme: 'system',
+  };
+}
+
+function apply_theme_preference() {
+  const theme_preference_value = application_state.user_preferences.theme || 'system';
+  let effective_theme_value = theme_preference_value;
+
+  if (theme_preference_value === 'system') {
+    effective_theme_value = window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
+  }
+
+  document.body.classList.toggle('theme-light', effective_theme_value === 'light');
 }
 
 let is_initial_auth_resolved = false;
@@ -51,6 +73,14 @@ const application_state = {
   mobile_view_mode: 'day',
   user_preferences: create_default_user_preferences()
 };
+
+apply_theme_preference();
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
+  if ((application_state.user_preferences.theme || 'system') === 'system') {
+    apply_theme_preference();
+  }
+});
 
 let currently_editing_subject_identifier = null;
 let currently_editing_assignment_identifier = null;
@@ -436,6 +466,7 @@ function reset_application_state_to_default() {
   application_state.attendance_records = [];
   application_state.assignments = [];
   application_state.user_preferences = create_default_user_preferences();
+  apply_theme_preference();
   render_entire_application_interface();
   render_assignments();
 }
@@ -445,6 +476,7 @@ function start_guest_session() {
   current_logged_in_user = null;
   is_guest_user = true;
   load_guest_application_state();
+  apply_theme_preference();
   render_authenticated_shell('Welcome, Guest');
   apply_startup_preferences('attendance');
 
@@ -477,10 +509,17 @@ async function start_authenticated_session(user) {
     if (typeof application_state.user_preferences.open_sidebar_on_startup === 'undefined') {
       application_state.user_preferences.open_sidebar_on_startup = true;
     }
+    if (typeof application_state.user_preferences.assignment_reminder_days === 'undefined') {
+      application_state.user_preferences.assignment_reminder_days = 3;
+    }
+    if (typeof application_state.user_preferences.theme === 'undefined') {
+      application_state.user_preferences.theme = 'system';
+    }
   } else {
     application_state.user_preferences = create_default_user_preferences();
   }
 
+  apply_theme_preference();
   apply_startup_preferences();
 }
 
@@ -579,6 +618,7 @@ window.switch_module = function (module_name) {
   }
 
   render_attendance_statistics_cards();
+  render_reminder_banner();
 
   if (module_name === 'assignments') {
     render_assignments();
@@ -843,6 +883,152 @@ function render_entire_application_interface() {
     render_weekly_calendar_grid();
   }
   render_assignments();
+  render_reminder_banner();
+}
+
+function get_upcoming_reminder_assignments() {
+  const reminder_window_days = parseInt(application_state.user_preferences.assignment_reminder_days) || 3;
+  const today_date = new Date();
+  today_date.setHours(0, 0, 0, 0);
+
+  return application_state.assignments
+    .filter(assignment_item => {
+      if (assignment_item.completion_status !== 'Pending') return false;
+      const due_date = new Date(assignment_item.due_date_string);
+      due_date.setHours(0, 0, 0, 0);
+      const diff_days = Math.round((due_date - today_date) / 86400000);
+      // Overdue assignments (diff_days < 0) are handled separately by
+      // get_overdue_reminder_assignments and are excluded here so the
+      // reminder window logic continues to apply only to future assignments.
+      return diff_days >= 0 && diff_days <= reminder_window_days;
+    })
+    .sort((a, b) => new Date(a.due_date_string) - new Date(b.due_date_string));
+}
+
+function get_overdue_reminder_assignments() {
+  const today_date = new Date();
+  today_date.setHours(0, 0, 0, 0);
+
+  return application_state.assignments
+    .filter(assignment_item => {
+      if (assignment_item.completion_status !== 'Pending') return false;
+      const due_date = new Date(assignment_item.due_date_string);
+      due_date.setHours(0, 0, 0, 0);
+      const diff_days = Math.round((due_date - today_date) / 86400000);
+      return diff_days < 0;
+    })
+    .sort((a, b) => new Date(a.due_date_string) - new Date(b.due_date_string));
+}
+
+function build_reminder_banner_message(overdue_reminder_assignments, upcoming_reminder_assignments) {
+  const reminder_window_days = parseInt(application_state.user_preferences.assignment_reminder_days) || 3;
+  const today_date = new Date();
+  today_date.setHours(0, 0, 0, 0);
+
+  const overdue_count = overdue_reminder_assignments.length;
+  const upcoming_count = upcoming_reminder_assignments.length;
+
+  // Single overdue assignment, nothing else pending in the window.
+  if (overdue_count === 1 && upcoming_count === 0) {
+    const single_assignment = overdue_reminder_assignments[0];
+    const due_date = new Date(single_assignment.due_date_string);
+    due_date.setHours(0, 0, 0, 0);
+    const diff_days = Math.round((due_date - today_date) / 86400000);
+    const overdue_by_days = Math.abs(diff_days);
+    return `Assignment "${single_assignment.assignment_name}" is overdue by ${overdue_by_days} day${overdue_by_days > 1 ? 's' : ''}.`;
+  }
+
+  // Only overdue assignments, more than one.
+  if (overdue_count > 1 && upcoming_count === 0) {
+    return `You have ${overdue_count} overdue assignments.`;
+  }
+
+  // Only upcoming assignments, no overdue.
+  if (overdue_count === 0 && upcoming_count === 1) {
+    const single_assignment = upcoming_reminder_assignments[0];
+    const due_date = new Date(single_assignment.due_date_string);
+    due_date.setHours(0, 0, 0, 0);
+    const diff_days = Math.round((due_date - today_date) / 86400000);
+
+    let due_phrase = `due in ${diff_days} days`;
+    if (diff_days === 0) due_phrase = 'due today';
+    else if (diff_days === 1) due_phrase = 'due tomorrow';
+
+    return `Assignment "${single_assignment.assignment_name}" is ${due_phrase}.`;
+  }
+
+  if (overdue_count === 0 && upcoming_count > 1) {
+    return `You have ${upcoming_count} assignments due within the next ${reminder_window_days} days.`;
+  }
+
+  // Mixed overdue and upcoming assignments.
+  const overdue_phrase = `${overdue_count} overdue assignment${overdue_count > 1 ? 's' : ''}`;
+
+  let upcoming_phrase = '';
+  if (upcoming_count === 1) {
+    const single_assignment = upcoming_reminder_assignments[0];
+    const due_date = new Date(single_assignment.due_date_string);
+    due_date.setHours(0, 0, 0, 0);
+    const diff_days = Math.round((due_date - today_date) / 86400000);
+
+    let due_phrase = `due in ${diff_days} days`;
+    if (diff_days === 0) due_phrase = 'due today';
+    else if (diff_days === 1) due_phrase = 'due tomorrow';
+
+    upcoming_phrase = `1 assignment ${due_phrase}`;
+  } else {
+    upcoming_phrase = `${upcoming_count} assignments due within the next ${reminder_window_days} days`;
+  }
+
+  return `${overdue_phrase} and ${upcoming_phrase}.`;
+}
+
+function render_reminder_banner() {
+  const banner_container = document.getElementById('reminder_banner_container');
+  if (!banner_container) return;
+
+  const is_mobile_viewport = window.innerWidth <= 1000;
+
+  if (!is_mobile_viewport) {
+    banner_container.innerHTML = '';
+    banner_container.classList.remove('has-reminders');
+    return;
+  }
+
+  if (reminder_banner_dismissed_this_session) {
+    banner_container.innerHTML = '';
+    banner_container.classList.remove('has-reminders');
+    return;
+  }
+
+  const overdue_reminder_assignments = get_overdue_reminder_assignments();
+  const upcoming_reminder_assignments = get_upcoming_reminder_assignments();
+
+  if (overdue_reminder_assignments.length === 0 && upcoming_reminder_assignments.length === 0) {
+    banner_container.innerHTML = '';
+    banner_container.classList.remove('has-reminders');
+    return;
+  }
+
+  const banner_message_text = build_reminder_banner_message(overdue_reminder_assignments, upcoming_reminder_assignments);
+  const banner_variant_class = overdue_reminder_assignments.length > 0 ? 'reminder-banner overdue' : 'reminder-banner';
+
+  banner_container.innerHTML = `
+    <div class="${banner_variant_class}">
+      <span class="reminder-banner-text">${banner_message_text}</span>
+      <button type="button" class="reminder-banner-close" id="reminder_banner_close_btn" aria-label="Dismiss reminder">&times;</button>
+    </div>
+  `;
+  banner_container.classList.add('has-reminders');
+
+  const close_btn = document.getElementById('reminder_banner_close_btn');
+  if (close_btn) {
+    close_btn.addEventListener('click', () => {
+      reminder_banner_dismissed_this_session = true;
+      banner_container.innerHTML = '';
+      banner_container.classList.remove('has-reminders');
+    });
+  }
 }
 
 function render_attendance_statistics_cards() {
@@ -1181,7 +1367,7 @@ function render_weekly_calendar_grid() {
     constructed_lecture_card_element.innerHTML = `
       <div class="lecture-info">
         <strong style="color: ${parent_subject_data_object.subject_color_hex || 'var(--accent)'}">${parent_subject_data_object.subject_code_text}</strong>
-        <span>${parent_subject_data_object.subject_name_text}</span>
+        <span class="lecture-subject-name-truncated" title="${parent_subject_data_object.subject_name_text}">${parent_subject_data_object.subject_name_text}</span>
         <span style="font-size:9px; color:var(--text-muted); margin-top:2px;">
           ${lecture_data_object.lecture_start_hour}:00 - ${lecture_data_object.lecture_start_hour + lecture_data_object.lecture_duration_hours}:00 
           ${lecture_data_object.lecture_type_string === 'extra' ? '(Extra)' : ''}
@@ -1597,8 +1783,10 @@ window.select_subject_color_swatch = function (
 
 let pending_custom_confirm_callback = null;
 
-window.show_custom_alert = function (message) {
+window.show_custom_alert = function (message, title = 'Notice') {
+  const alert_title_element = document.getElementById('custom_alert_title');
   const alert_message_element = document.getElementById('custom_alert_message');
+  if (alert_title_element) alert_title_element.textContent = title;
   alert_message_element.textContent = message;
   open_interface_modal('custom_alert_modal');
   setTimeout(() => document.getElementById('custom_alert_ok_button').focus(), 0);
@@ -1770,17 +1958,90 @@ window.delete_selected_subject_data = function (target_subject_identifier) {
   );
 };
 
+function find_schedule_time_conflict(day_of_week_name, new_start_hour, new_end_hour, options = {}) {
+  const { exclude_slot_identifier = null, check_extra_date_string = null } = options;
+
+  const conflicting_weekly_slot = application_state.weekly_schedule_slots.find(slot_item => {
+    if (slot_item.day_of_week_name !== day_of_week_name) return false;
+    if (exclude_slot_identifier && slot_item.slot_identifier === exclude_slot_identifier) return false;
+    const existing_start_hour = slot_item.start_time_hour_value;
+    const existing_end_hour = existing_start_hour + slot_item.lecture_duration_value;
+    return new_start_hour < existing_end_hour && new_end_hour > existing_start_hour;
+  });
+
+  if (conflicting_weekly_slot) {
+    const conflicting_subject = retrieve_subject_object_by_identifier(
+      conflicting_weekly_slot.parent_subject_identifier,
+    );
+    return {
+      subject_code: conflicting_subject ? conflicting_subject.subject_code_text : 'Unknown Subject',
+      day_name: day_of_week_name,
+      start_hour: conflicting_weekly_slot.start_time_hour_value,
+      end_hour: conflicting_weekly_slot.start_time_hour_value + conflicting_weekly_slot.lecture_duration_value,
+    };
+  }
+
+  if (check_extra_date_string) {
+    const conflicting_extra_class = application_state.additional_extra_classes.find(extra_class_item => {
+      if (extra_class_item.lecture_date_string !== check_extra_date_string) return false;
+      const existing_start_hour = extra_class_item.start_time_hour_value;
+      const existing_end_hour = existing_start_hour + extra_class_item.lecture_duration_value;
+      return new_start_hour < existing_end_hour && new_end_hour > existing_start_hour;
+    });
+
+    if (conflicting_extra_class) {
+      const conflicting_subject = retrieve_subject_object_by_identifier(
+        conflicting_extra_class.parent_subject_identifier,
+      );
+      return {
+        subject_code: conflicting_subject ? conflicting_subject.subject_code_text : 'Unknown Subject',
+        day_name: day_of_week_name,
+        start_hour: conflicting_extra_class.start_time_hour_value,
+        end_hour: conflicting_extra_class.start_time_hour_value + conflicting_extra_class.lecture_duration_value,
+      };
+    }
+  }
+
+  return null;
+}
+
+function show_time_conflict_alert(conflict_details) {
+  const conflict_message_text =
+    `This class overlaps with:\n\n` +
+    `${conflict_details.subject_code}\n` +
+    `${conflict_details.day_name}\n` +
+    `${conflict_details.start_hour}:00 - ${conflict_details.end_hour}:00\n\n` +
+    `Please select a different time.`;
+  show_custom_alert(conflict_message_text, 'Time Conflict Detected');
+}
+
 document
   .getElementById('weekly_slot_form')
   .addEventListener('submit', form_submit_event => {
     form_submit_event.preventDefault();
+    const selected_day_name = document.getElementById('slot_day_selection').value;
+    const selected_start_hour = parseInt(document.getElementById('slot_start_time_selection').value);
+    const selected_duration = parseInt(document.getElementById('slot_duration_selection').value);
+    const selected_end_hour = selected_start_hour + selected_duration;
+
+    const detected_conflict = find_schedule_time_conflict(
+      selected_day_name,
+      selected_start_hour,
+      selected_end_hour,
+    );
+
+    if (detected_conflict) {
+      show_time_conflict_alert(detected_conflict);
+      return;
+    }
+
     const new_id = generate_unique_random_identifier('slot');
     persist_collection_record('weekly_slots', new_id, {
       slot_identifier: new_id,
       parent_subject_identifier: document.getElementById('slot_subject_selection').value,
-      day_of_week_name: document.getElementById('slot_day_selection').value,
-      start_time_hour_value: parseInt(document.getElementById('slot_start_time_selection').value),
-      lecture_duration_value: parseInt(document.getElementById('slot_duration_selection').value),
+      day_of_week_name: selected_day_name,
+      start_time_hour_value: selected_start_hour,
+      lecture_duration_value: selected_duration,
     });
     close_all_interface_modals();
   });
@@ -1789,13 +2050,41 @@ document
   .getElementById('extra_class_input_form')
   .addEventListener('submit', form_submit_event => {
     form_submit_event.preventDefault();
+    const selected_date_string = document.getElementById('extra_date_selection').value;
+    const selected_start_hour = parseInt(document.getElementById('extra_start_time_selection').value);
+    const selected_duration = parseInt(document.getElementById('extra_duration_selection').value);
+    const selected_end_hour = selected_start_hour + selected_duration;
+
+    const parsed_extra_date = new Date(selected_date_string + 'T00:00:00');
+    const derived_day_name_string = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ][parsed_extra_date.getDay()];
+
+    const detected_conflict = find_schedule_time_conflict(
+      derived_day_name_string,
+      selected_start_hour,
+      selected_end_hour,
+      { check_extra_date_string: selected_date_string },
+    );
+
+    if (detected_conflict) {
+      show_time_conflict_alert(detected_conflict);
+      return;
+    }
+
     const new_id = generate_unique_random_identifier('extra');
     persist_collection_record('extra_classes', new_id, {
       extra_class_identifier: new_id,
       parent_subject_identifier: document.getElementById('extra_subject_selection').value,
-      lecture_date_string: document.getElementById('extra_date_selection').value,
-      start_time_hour_value: parseInt(document.getElementById('extra_start_time_selection').value),
-      lecture_duration_value: parseInt(document.getElementById('extra_duration_selection').value),
+      lecture_date_string: selected_date_string,
+      start_time_hour_value: selected_start_hour,
+      lecture_duration_value: selected_duration,
     });
     close_all_interface_modals();
   });
@@ -1976,6 +2265,8 @@ window.navigate_to_current_week = function () {
 window.open_settings_modal = function() {
   document.getElementById('setting_default_module').value = application_state.user_preferences.default_module || 'attendance';
   document.getElementById('setting_mobile_sidebar').value = application_state.user_preferences.open_sidebar_on_startup !== false ? 'true' : 'false';
+  document.getElementById('setting_reminder_window').value = String(application_state.user_preferences.assignment_reminder_days || 3);
+  document.getElementById('setting_theme_appearance').value = application_state.user_preferences.theme || 'system';
   open_interface_modal('settings_modal');
 };
 
@@ -1983,9 +2274,15 @@ document.getElementById('settings_form').addEventListener('submit', form_submit_
   form_submit_event.preventDefault();
   const selected_module = document.getElementById('setting_default_module').value;
   const open_sidebar = document.getElementById('setting_mobile_sidebar').value === 'true';
+  const reminder_window_days = parseInt(document.getElementById('setting_reminder_window').value) || 3;
+  const selected_theme = document.getElementById('setting_theme_appearance').value;
   application_state.user_preferences.default_module = selected_module;
   application_state.user_preferences.open_sidebar_on_startup = open_sidebar;
+  application_state.user_preferences.assignment_reminder_days = reminder_window_days;
+  application_state.user_preferences.theme = selected_theme;
   persist_user_preferences();
+  apply_theme_preference();
+  render_reminder_banner();
   close_all_interface_modals();
 });
 

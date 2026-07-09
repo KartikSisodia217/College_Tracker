@@ -129,9 +129,12 @@
         </svg>
         <span class="btn-text">Logout</span>
       </button>
+      <a id="report_issue_link" class="report-issue-link" href="https://github.com/KartikSisodia217/College_Tracker/issues/new" target="_blank" rel="noopener noreferrer">Report an Issue</a>
     </aside>
 
     <main class="main-area">
+
+      <div id="reminder_banner_container" class="reminder-banner-container"></div>
 
       <div id="module-attendance" class="module-content active">
         <div class="toolbar">
@@ -317,6 +320,22 @@
           <select id="setting_mobile_sidebar" required>
             <option value="true">Yes</option>
             <option value="false">No</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Assignment Reminder Window</label>
+          <select id="setting_reminder_window" required>
+            <option value="1">1 Day</option>
+            <option value="3">3 Days</option>
+            <option value="7">7 Days</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Appearance</label>
+          <select id="setting_theme_appearance" required>
+            <option value="system">System Default</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
           </select>
         </div>
         <div class="modal-actions">
