@@ -1605,3 +1605,58 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   scrollbar-width: thin;
   scrollbar-color: var(--border) var(--bg-sec);
 }
+
+.form-group .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.form-group .checkbox-label input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+}
+
+.lab-details-toggle {
+  display: block;
+  margin-top: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lab-details-toggle:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.lab-details {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.2s ease, opacity 0.2s ease;
+}
+
+.lab-details.expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.lab-details-content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lab-details-title {
+  margin: 12px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}

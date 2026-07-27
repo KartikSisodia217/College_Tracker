@@ -86,6 +86,7 @@ let currently_editing_subject_identifier = null;
 let currently_editing_assignment_identifier = null;
 let current_logged_in_user = null;
 let is_guest_user = false;
+const expanded_lab_subject_identifiers = new Set();
 let firestore_unsubscribers = [];
 let pending_guest_upgrade_user = null;
 let pending_guest_upgrade_data = null;
@@ -558,6 +559,47 @@ function retrieve_subject_object_by_identifier(target_subject_identifier) {
   );
 }
 
+function normalize_attendance_type(attendance_type_value) {
+  return attendance_type_value === 'Lab' ? 'Lab' : 'Lecture';
+}
+
+function get_attendance_type_for_class(class_item) {
+  return normalize_attendance_type(class_item.attendance_type);
+}
+
+function build_attendance_identifier(subject_identifier, date_string, start_hour, attendance_type) {
+  const lab_suffix = normalize_attendance_type(attendance_type) === 'Lab' ? '_lab' : '';
+  return `att_${subject_identifier}_${date_string}_${start_hour}${lab_suffix}`;
+}
+
+function calculate_subject_attendance(subject_identifier, attendance_type = 'Lecture') {
+  let present = 0;
+  let total = 0;
+  const normalized_type = normalize_attendance_type(attendance_type);
+
+  application_state.attendance_records.forEach(attendance_record_item => {
+    if (
+      attendance_record_item.parent_subject_identifier !== subject_identifier ||
+      normalize_attendance_type(attendance_record_item.attendance_type) !== normalized_type
+    ) return;
+
+    (attendance_record_item.lecture_status_array || []).forEach(attendance_status_value => {
+      if (attendance_status_value === 'P') {
+        present++;
+        total++;
+      } else if (attendance_status_value === 'A') {
+        total++;
+      }
+    });
+  });
+
+  return {
+    present,
+    total,
+    percentage: total === 0 ? '0.0' : ((present / total) * 100).toFixed(1),
+  };
+}
+
 function gather_lectures_for_date(target_date_string, derived_day_name_string) {
   let compiled_lectures_array = [];
   application_state.weekly_schedule_slots.forEach(slot_item => {
@@ -568,6 +610,7 @@ function gather_lectures_for_date(target_date_string, derived_day_name_string) {
         parent_subject_identifier: slot_item.parent_subject_identifier,
         start_time_hour_value: slot_item.start_time_hour_value,
         lecture_duration_value: slot_item.lecture_duration_value,
+        attendance_type: get_attendance_type_for_class(slot_item),
       });
     }
   });
@@ -579,6 +622,7 @@ function gather_lectures_for_date(target_date_string, derived_day_name_string) {
         parent_subject_identifier: extra_class_item.parent_subject_identifier,
         start_time_hour_value: extra_class_item.start_time_hour_value,
         lecture_duration_value: extra_class_item.lecture_duration_value,
+        attendance_type: get_attendance_type_for_class(extra_class_item),
       });
     }
   });
@@ -1044,40 +1088,16 @@ function render_attendance_statistics_cards() {
     let card_content_html = '';
 
     if (active_module === 'attendance') {
-      let total_present_hours_count = 0;
-      let total_scheduled_hours_count = 0;
-      let total_cancelled_hours_count = 0;
+      const lecture_attendance = calculate_subject_attendance(
+        current_subject_data.subject_identifier,
+        'Lecture',
+      );
+      const total_present_hours_count = lecture_attendance.present;
+      const total_scheduled_hours_count = lecture_attendance.total;
 
       const target_val = current_subject_data.target_percentage || 75;
       const target_dec = target_val / 100;
-
-      application_state.attendance_records.forEach(attendance_record_item => {
-        if (
-          attendance_record_item.parent_subject_identifier ===
-          current_subject_data.subject_identifier
-        ) {
-          attendance_record_item.lecture_status_array.forEach(
-            attendance_status_value => {
-              if (attendance_status_value === 'P') {
-                total_present_hours_count++;
-                total_scheduled_hours_count++;
-              } else if (attendance_status_value === 'A') {
-                total_scheduled_hours_count++;
-              } else if (attendance_status_value === 'C') {
-                total_cancelled_hours_count++;
-              }
-            },
-          );
-        }
-      });
-
-      const calculated_attendance_percentage =
-        total_scheduled_hours_count === 0
-          ? 0
-          : (
-            (total_present_hours_count / total_scheduled_hours_count) *
-            100
-          ).toFixed(1);
+      const calculated_attendance_percentage = lecture_attendance.percentage;
       let dynamic_target_text_output = '';
 
       if (total_scheduled_hours_count === 0) {
@@ -1161,6 +1181,30 @@ function render_attendance_statistics_cards() {
       }
     }
 
+    const has_labs = current_subject_data.has_lab === true;
+    const is_lab_details_expanded = expanded_lab_subject_identifiers.has(
+      current_subject_data.subject_identifier,
+    );
+    let lab_details_html = '';
+    if (active_module === 'attendance' && has_labs) {
+      const lab_attendance = calculate_subject_attendance(
+        current_subject_data.subject_identifier,
+        'Lab',
+      );
+      lab_details_html = `
+        <div class="lab-details ${is_lab_details_expanded ? 'expanded' : ''}">
+          <div class="lab-details-content">
+            <div class="lab-details-title">Lab Attendance</div>
+            <div class="stat-row"><span>Present:</span> <span>${lab_attendance.present}</span></div>
+            <div class="stat-row"><span>Total:</span> <span>${lab_attendance.total}</span></div>
+            <div class="stat-row"><span>Target:</span> <span>${current_subject_data.target_percentage || 75}%</span></div>
+            <div class="stat-perc" style="color: ${current_subject_data.subject_color_hex || 'var(--accent)'};">${lab_attendance.percentage}%</div>
+          </div>
+        </div>
+        <button class="lab-details-toggle" onclick="toggle_lab_details('${current_subject_data.subject_identifier}')">${is_lab_details_expanded ? 'Hide Lab Details' : 'View Lab Details'}</button>
+      `;
+    }
+
     statistics_list_container.innerHTML += `
       <div class="stat-card" style="border-left: 4px solid ${current_subject_data.subject_color_hex || 'var(--accent)'}">
         <div class="subject-header" style="align-items: flex-start;">
@@ -1172,6 +1216,7 @@ function render_attendance_statistics_cards() {
           </div>
         </div>
         ${card_content_html}
+        ${lab_details_html}
       </div>
     `;
   });
@@ -1296,6 +1341,7 @@ function render_weekly_calendar_grid() {
       lecture_day_index: corresponding_day_index_value,
       lecture_start_hour: schedule_slot_item.start_time_hour_value,
       lecture_duration_hours: schedule_slot_item.lecture_duration_value,
+      attendance_type: get_attendance_type_for_class(schedule_slot_item),
     });
   });
 
@@ -1320,6 +1366,7 @@ function render_weekly_calendar_grid() {
         lecture_day_index: calculated_difference_in_days,
         lecture_start_hour: extra_class_item.start_time_hour_value,
         lecture_duration_hours: extra_class_item.lecture_duration_value,
+        attendance_type: get_attendance_type_for_class(extra_class_item),
       });
     }
   });
@@ -1330,7 +1377,13 @@ function render_weekly_calendar_grid() {
     );
     if (!parent_subject_data_object) return;
 
-    const generated_attendance_identifier = `att_${lecture_data_object.parent_subject_identifier}_${lecture_data_object.lecture_date_string}_${lecture_data_object.lecture_start_hour}`;
+    const attendance_type = normalize_attendance_type(lecture_data_object.attendance_type);
+    const generated_attendance_identifier = build_attendance_identifier(
+      lecture_data_object.parent_subject_identifier,
+      lecture_data_object.lecture_date_string,
+      lecture_data_object.lecture_start_hour,
+      attendance_type,
+    );
     let retrieved_attendance_record = application_state.attendance_records.find(
       attendance_item =>
         attendance_item.attendance_identifier ===
@@ -1346,13 +1399,16 @@ function render_weekly_calendar_grid() {
     const dynamic_absent_class = primary_status_value === 'A' ? 'active-a' : '';
     const dynamic_cancelled_class =
       primary_status_value === 'C' ? 'active-c' : '';
+    const display_subject_name = attendance_type === 'Lab'
+      ? `(LAB) ${parent_subject_data_object.subject_name_text}`
+      : parent_subject_data_object.subject_name_text;
 
     let generated_attendance_html_string = `
       <div class="attendance-controls">
         <div class="attendance-row">
-          <button class="att-btn ${dynamic_present_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${lecture_data_object.lecture_date_string}', ${lecture_data_object.lecture_start_hour}, ${lecture_data_object.lecture_duration_hours}, 'P')">[P]</button>
-          <button class="att-btn ${dynamic_absent_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${lecture_data_object.lecture_date_string}', ${lecture_data_object.lecture_start_hour}, ${lecture_data_object.lecture_duration_hours}, 'A')">[A]</button>
-          <button class="att-btn ${dynamic_cancelled_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${lecture_data_object.lecture_date_string}', ${lecture_data_object.lecture_start_hour}, ${lecture_data_object.lecture_duration_hours}, 'C')">[C]</button>
+          <button class="att-btn ${dynamic_present_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${lecture_data_object.lecture_date_string}', ${lecture_data_object.lecture_start_hour}, ${lecture_data_object.lecture_duration_hours}, 'P', '${attendance_type}')">[P]</button>
+          <button class="att-btn ${dynamic_absent_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${lecture_data_object.lecture_date_string}', ${lecture_data_object.lecture_start_hour}, ${lecture_data_object.lecture_duration_hours}, 'A', '${attendance_type}')">[A]</button>
+          <button class="att-btn ${dynamic_cancelled_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${lecture_data_object.lecture_date_string}', ${lecture_data_object.lecture_start_hour}, ${lecture_data_object.lecture_duration_hours}, 'C', '${attendance_type}')">[C]</button>
         </div>
       </div>`;
 
@@ -1367,7 +1423,7 @@ function render_weekly_calendar_grid() {
     constructed_lecture_card_element.innerHTML = `
       <div class="lecture-info">
         <strong style="color: ${parent_subject_data_object.subject_color_hex || 'var(--accent)'}">${parent_subject_data_object.subject_code_text}</strong>
-        <span class="lecture-subject-name-truncated" title="${parent_subject_data_object.subject_name_text}">${parent_subject_data_object.subject_name_text}</span>
+        <span class="lecture-subject-name-truncated" title="${display_subject_name}">${display_subject_name}</span>
         <span style="font-size:9px; color:var(--text-muted); margin-top:2px;">
           ${lecture_data_object.lecture_start_hour}:00 - ${lecture_data_object.lecture_start_hour + lecture_data_object.lecture_duration_hours}:00 
           ${lecture_data_object.lecture_type_string === 'extra' ? '(Extra)' : ''}
@@ -1564,7 +1620,13 @@ function render_mobile_day_view(mobile_container) {
       );
       if (!parent_subject_data_object) return;
 
-      const generated_attendance_identifier = `att_${lecture_data_object.parent_subject_identifier}_${target_date_string}_${lecture_data_object.start_time_hour_value}`;
+      const attendance_type = normalize_attendance_type(lecture_data_object.attendance_type);
+      const generated_attendance_identifier = build_attendance_identifier(
+        lecture_data_object.parent_subject_identifier,
+        target_date_string,
+        lecture_data_object.start_time_hour_value,
+        attendance_type,
+      );
       let retrieved_attendance_record =
         application_state.attendance_records.find(
           attendance_item =>
@@ -1582,13 +1644,16 @@ function render_mobile_day_view(mobile_container) {
         primary_status_value === 'A' ? 'active-a' : '';
       const dynamic_cancelled_class =
         primary_status_value === 'C' ? 'active-c' : '';
+      const display_subject_name = attendance_type === 'Lab'
+        ? `(LAB) ${parent_subject_data_object.subject_name_text}`
+        : parent_subject_data_object.subject_name_text;
 
       html_content_string += `
         <div class="mobile-lecture-card" style="border-left: 4px solid ${parent_subject_data_object.subject_color_hex || 'var(--accent)'}">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
             <div class="lecture-info">
               <strong style="color: ${parent_subject_data_object.subject_color_hex || 'var(--accent)'}; font-size: 15px;">${parent_subject_data_object.subject_code_text}</strong>
-              <span style="font-size: 14px; margin-top: 2px;">${parent_subject_data_object.subject_name_text}</span>
+              <span style="font-size: 14px; margin-top: 2px;">${display_subject_name}</span>
               <span style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">
                 ${lecture_data_object.start_time_hour_value}:00 - ${lecture_data_object.start_time_hour_value + lecture_data_object.lecture_duration_value}:00
                 ${lecture_data_object.lecture_type_string === 'extra' ? '<span style="color: var(--accent); margin-left: 4px;">(Extra Class)</span>' : ''}
@@ -1598,9 +1663,9 @@ function render_mobile_day_view(mobile_container) {
           </div>
           <div class="attendance-controls" style="margin-top: 8px;">
             <div class="attendance-row">
-              <button class="att-btn ${dynamic_present_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${target_date_string}', ${lecture_data_object.start_time_hour_value}, ${lecture_data_object.lecture_duration_value}, 'P')">Present</button>
-              <button class="att-btn ${dynamic_absent_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${target_date_string}', ${lecture_data_object.start_time_hour_value}, ${lecture_data_object.lecture_duration_value}, 'A')">Absent</button>
-              <button class="att-btn ${dynamic_cancelled_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${target_date_string}', ${lecture_data_object.start_time_hour_value}, ${lecture_data_object.lecture_duration_value}, 'C')">Cancelled</button>
+              <button class="att-btn ${dynamic_present_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${target_date_string}', ${lecture_data_object.start_time_hour_value}, ${lecture_data_object.lecture_duration_value}, 'P', '${attendance_type}')">Present</button>
+              <button class="att-btn ${dynamic_absent_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${target_date_string}', ${lecture_data_object.start_time_hour_value}, ${lecture_data_object.lecture_duration_value}, 'A', '${attendance_type}')">Absent</button>
+              <button class="att-btn ${dynamic_cancelled_class}" onclick="mark_specific_lecture_attendance_bulk('${generated_attendance_identifier}', '${lecture_data_object.parent_subject_identifier}', '${target_date_string}', ${lecture_data_object.start_time_hour_value}, ${lecture_data_object.lecture_duration_value}, 'C', '${attendance_type}')">Cancelled</button>
             </div>
           </div>
         </div>
@@ -1680,7 +1745,13 @@ function render_mobile_week_view(mobile_container) {
         );
         if (!parent_subject_data) return;
 
-        const att_identifier = `att_${lecture_data.parent_subject_identifier}_${loop_date_string}_${lecture_data.start_time_hour_value}`;
+        const attendance_type = normalize_attendance_type(lecture_data.attendance_type);
+        const att_identifier = build_attendance_identifier(
+          lecture_data.parent_subject_identifier,
+          loop_date_string,
+          lecture_data.start_time_hour_value,
+          attendance_type,
+        );
         let att_record = application_state.attendance_records.find(
           a => a.attendance_identifier === att_identifier,
         );
@@ -1692,17 +1763,20 @@ function render_mobile_week_view(mobile_container) {
         const p_class = pri_status === 'P' ? 'active-p' : '';
         const a_class = pri_status === 'A' ? 'active-a' : '';
         const c_class = pri_status === 'C' ? 'active-c' : '';
+        const display_subject_code = attendance_type === 'Lab'
+          ? `(LAB) ${parent_subject_data.subject_code_text}`
+          : parent_subject_data.subject_code_text;
 
         html_content_string += `
           <div class="compact-lecture-card" style="border-left-color: ${parent_subject_data.subject_color_hex || 'var(--accent)'}">
             <div class="compact-lecture-info">
-              <strong style="color: ${parent_subject_data.subject_color_hex || 'var(--accent)'}; font-size: 13px;">${parent_subject_data.subject_code_text}</strong>
+              <strong style="color: ${parent_subject_data.subject_color_hex || 'var(--accent)'}; font-size: 13px;">${display_subject_code}</strong>
               <span style="font-size: 11px; color: var(--text-muted); margin-top: 3px;"> ${lecture_data.start_time_hour_value}:00 - ${lecture_data.start_time_hour_value + lecture_data.lecture_duration_value}:00</span>
             </div>
             <div class="compact-att-controls">
-              <button class="compact-att-btn ${p_class}" style="${p_class ? 'background:var(--present); color:#000; border-color:var(--present);' : ''}" onclick="mark_specific_lecture_attendance_bulk('${att_identifier}', '${lecture_data.parent_subject_identifier}', '${loop_date_string}', ${lecture_data.start_time_hour_value}, ${lecture_data.lecture_duration_value}, 'P')">P</button>
-              <button class="compact-att-btn ${a_class}" style="${a_class ? 'background:var(--absent); color:#fff; border-color:var(--absent);' : ''}" onclick="mark_specific_lecture_attendance_bulk('${att_identifier}', '${lecture_data.parent_subject_identifier}', '${loop_date_string}', ${lecture_data.start_time_hour_value}, ${lecture_data.lecture_duration_value}, 'A')">A</button>
-              <button class="compact-att-btn ${c_class}" style="${c_class ? 'background:var(--cancelled); color:#fff; border-color:var(--cancelled);' : ''}" onclick="mark_specific_lecture_attendance_bulk('${att_identifier}', '${lecture_data.parent_subject_identifier}', '${loop_date_string}', ${lecture_data.start_time_hour_value}, ${lecture_data.lecture_duration_value}, 'C')">C</button>
+              <button class="compact-att-btn ${p_class}" style="${p_class ? 'background:var(--present); color:#000; border-color:var(--present);' : ''}" onclick="mark_specific_lecture_attendance_bulk('${att_identifier}', '${lecture_data.parent_subject_identifier}', '${loop_date_string}', ${lecture_data.start_time_hour_value}, ${lecture_data.lecture_duration_value}, 'P', '${attendance_type}')">P</button>
+              <button class="compact-att-btn ${a_class}" style="${a_class ? 'background:var(--absent); color:#fff; border-color:var(--absent);' : ''}" onclick="mark_specific_lecture_attendance_bulk('${att_identifier}', '${lecture_data.parent_subject_identifier}', '${loop_date_string}', ${lecture_data.start_time_hour_value}, ${lecture_data.lecture_duration_value}, 'A', '${attendance_type}')">A</button>
+              <button class="compact-att-btn ${c_class}" style="${c_class ? 'background:var(--cancelled); color:#fff; border-color:var(--cancelled);' : ''}" onclick="mark_specific_lecture_attendance_bulk('${att_identifier}', '${lecture_data.parent_subject_identifier}', '${loop_date_string}', ${lecture_data.start_time_hour_value}, ${lecture_data.lecture_duration_value}, 'C', '${attendance_type}')">C</button>
             </div>
           </div>
         `;
@@ -1751,7 +1825,46 @@ function update_dropdown_selection_options() {
   if (slot_subject_dropdown_element) slot_subject_dropdown_element.innerHTML = generated_options_html_string;
   if (extra_subject_dropdown_element) extra_subject_dropdown_element.innerHTML = generated_options_html_string;
   if (assignment_subject_selection) assignment_subject_selection.innerHTML = generated_options_html_string;
+  window.update_slot_attendance_type_visibility();
+  window.update_extra_attendance_type_visibility();
 }
+
+function update_attendance_type_visibility(subject_select_id, group_id, type_select_id) {
+  const subject_select = document.getElementById(subject_select_id);
+  const group = document.getElementById(group_id);
+  const type_select = document.getElementById(type_select_id);
+  if (!subject_select || !group || !type_select) return;
+
+  const selected_subject = retrieve_subject_object_by_identifier(subject_select.value);
+  const subject_has_labs = selected_subject && selected_subject.has_lab === true;
+  group.classList.toggle('hidden', !subject_has_labs);
+  if (!subject_has_labs) type_select.value = 'Lecture';
+}
+
+window.update_slot_attendance_type_visibility = function () {
+  update_attendance_type_visibility(
+    'slot_subject_selection',
+    'slot_attendance_type_group',
+    'slot_attendance_type_selection',
+  );
+};
+
+window.update_extra_attendance_type_visibility = function () {
+  update_attendance_type_visibility(
+    'extra_subject_selection',
+    'extra_attendance_type_group',
+    'extra_attendance_type_selection',
+  );
+};
+
+window.toggle_lab_details = function (subject_identifier) {
+  if (expanded_lab_subject_identifiers.has(subject_identifier)) {
+    expanded_lab_subject_identifiers.delete(subject_identifier);
+  } else {
+    expanded_lab_subject_identifiers.add(subject_identifier);
+  }
+  render_attendance_statistics_cards();
+};
 
 function initialize_color_selection_palette(
   selected_color_hex_value = THEME_COLORS_ARRAY[0],
@@ -1840,6 +1953,7 @@ window.open_add_subject_modal = function () {
 
   const target_input = document.getElementById('subject_target_input');
   if (target_input) target_input.value = 75;
+  document.getElementById('subject_has_lab_input').checked = false;
 
   initialize_color_selection_palette(THEME_COLORS_ARRAY[0]);
   open_interface_modal('subject_creation_modal');
@@ -1860,6 +1974,8 @@ window.open_edit_subject_modal = function (target_subject_identifier) {
   const target_input = document.getElementById('subject_target_input');
   if (target_input)
     target_input.value = retrieved_subject_data.target_percentage || 75;
+  document.getElementById('subject_has_lab_input').checked =
+    retrieved_subject_data.has_lab === true;
 
   initialize_color_selection_palette(
     retrieved_subject_data.subject_color_hex || THEME_COLORS_ARRAY[0],
@@ -1883,6 +1999,7 @@ document
 
     const entered_target_percentage =
       parseInt(document.getElementById('subject_target_input').value) || 75;
+    const has_lab = document.getElementById('subject_has_lab_input').checked;
 
     if (currently_editing_subject_identifier) {
       if (
@@ -1904,7 +2021,8 @@ document
         subject_name_text: entered_subject_name_value,
         subject_code_text: entered_subject_code_value,
         subject_color_hex: selected_subject_color_value,
-        target_percentage: entered_target_percentage
+        target_percentage: entered_target_percentage,
+        has_lab,
       }, { merge: true });
     } else {
       if (
@@ -1923,6 +2041,7 @@ document
         subject_code_text: entered_subject_code_value,
         subject_color_hex: selected_subject_color_value,
         target_percentage: entered_target_percentage,
+        has_lab,
       });
     }
     close_all_interface_modals();
@@ -2022,6 +2141,11 @@ document
     const selected_day_name = document.getElementById('slot_day_selection').value;
     const selected_start_hour = parseInt(document.getElementById('slot_start_time_selection').value);
     const selected_duration = parseInt(document.getElementById('slot_duration_selection').value);
+    const selected_subject_identifier = document.getElementById('slot_subject_selection').value;
+    const selected_subject = retrieve_subject_object_by_identifier(selected_subject_identifier);
+    const attendance_type = selected_subject && selected_subject.has_lab === true
+      ? normalize_attendance_type(document.getElementById('slot_attendance_type_selection').value)
+      : 'Lecture';
     const selected_end_hour = selected_start_hour + selected_duration;
 
     const detected_conflict = find_schedule_time_conflict(
@@ -2038,10 +2162,11 @@ document
     const new_id = generate_unique_random_identifier('slot');
     persist_collection_record('weekly_slots', new_id, {
       slot_identifier: new_id,
-      parent_subject_identifier: document.getElementById('slot_subject_selection').value,
+      parent_subject_identifier: selected_subject_identifier,
       day_of_week_name: selected_day_name,
       start_time_hour_value: selected_start_hour,
       lecture_duration_value: selected_duration,
+      attendance_type,
     });
     close_all_interface_modals();
   });
@@ -2053,6 +2178,11 @@ document
     const selected_date_string = document.getElementById('extra_date_selection').value;
     const selected_start_hour = parseInt(document.getElementById('extra_start_time_selection').value);
     const selected_duration = parseInt(document.getElementById('extra_duration_selection').value);
+    const selected_subject_identifier = document.getElementById('extra_subject_selection').value;
+    const selected_subject = retrieve_subject_object_by_identifier(selected_subject_identifier);
+    const attendance_type = selected_subject && selected_subject.has_lab === true
+      ? normalize_attendance_type(document.getElementById('extra_attendance_type_selection').value)
+      : 'Lecture';
     const selected_end_hour = selected_start_hour + selected_duration;
 
     const parsed_extra_date = new Date(selected_date_string + 'T00:00:00');
@@ -2081,10 +2211,11 @@ document
     const new_id = generate_unique_random_identifier('extra');
     persist_collection_record('extra_classes', new_id, {
       extra_class_identifier: new_id,
-      parent_subject_identifier: document.getElementById('extra_subject_selection').value,
+      parent_subject_identifier: selected_subject_identifier,
       lecture_date_string: selected_date_string,
       start_time_hour_value: selected_start_hour,
       lecture_duration_value: selected_duration,
+      attendance_type,
     });
     close_all_interface_modals();
   });
@@ -2106,7 +2237,9 @@ window.delete_scheduled_lecture_instance = function (
               attendance_item.parent_subject_identifier ===
               located_slot_record.parent_subject_identifier &&
               attendance_item.lecture_start_hour ===
-              located_slot_record.start_time_hour_value
+              located_slot_record.start_time_hour_value &&
+              normalize_attendance_type(attendance_item.attendance_type) ===
+              get_attendance_type_for_class(located_slot_record)
             ) {
               const parsed_attendance_date = new Date(
                 attendance_item.lecture_date_string + 'T00:00:00',
@@ -2147,7 +2280,9 @@ window.delete_scheduled_lecture_instance = function (
               attendance_item.lecture_date_string ===
               located_extra_class_record.lecture_date_string &&
               attendance_item.lecture_start_hour ===
-              located_extra_class_record.start_time_hour_value
+              located_extra_class_record.start_time_hour_value &&
+              normalize_attendance_type(attendance_item.attendance_type) ===
+              get_attendance_type_for_class(located_extra_class_record)
             ) {
               delete_collection_record('attendance_records', attendance_item.attendance_identifier);
             }
@@ -2166,6 +2301,7 @@ window.mark_specific_lecture_attendance_bulk = function (
   target_start_hour,
   target_total_hours_duration,
   applied_status_value,
+  attendance_type = 'Lecture',
 ) {
   let located_attendance_record = application_state.attendance_records.find(
     attendance_item =>
@@ -2182,6 +2318,7 @@ window.mark_specific_lecture_attendance_bulk = function (
       lecture_date_string: target_date_string,
       lecture_start_hour: target_start_hour,
       lecture_status_array: new_status_array,
+      attendance_type: normalize_attendance_type(attendance_type),
     });
   } else {
     if (located_attendance_record.lecture_status_array[0] === applied_status_value) {
@@ -2191,7 +2328,8 @@ window.mark_specific_lecture_attendance_bulk = function (
     }
     persist_collection_record('attendance_records', target_attendance_identifier, {
       ...located_attendance_record,
-      lecture_status_array: new_status_array
+      lecture_status_array: new_status_array,
+      attendance_type: normalize_attendance_type(attendance_type),
     }, { merge: true });
   }
 };
@@ -2222,7 +2360,13 @@ window.mark_full_day_attendance_bulk = function (
   }
 
   compiled_lectures_for_day_array.forEach(lecture_data_object => {
-    const generated_attendance_identifier = `att_${lecture_data_object.parent_subject_identifier}_${target_date_string}_${lecture_data_object.start_time_hour_value}`;
+    const attendance_type = normalize_attendance_type(lecture_data_object.attendance_type);
+    const generated_attendance_identifier = build_attendance_identifier(
+      lecture_data_object.parent_subject_identifier,
+      target_date_string,
+      lecture_data_object.start_time_hour_value,
+      attendance_type,
+    );
     let located_attendance_record = application_state.attendance_records.find(
       attendance_item =>
         attendance_item.attendance_identifier ===
@@ -2236,11 +2380,13 @@ window.mark_full_day_attendance_bulk = function (
         lecture_date_string: target_date_string,
         lecture_start_hour: lecture_data_object.start_time_hour_value,
         lecture_status_array: new Array(lecture_data_object.lecture_duration_value).fill(applied_status_value),
+        attendance_type,
       });
     } else {
       persist_collection_record('attendance_records', generated_attendance_identifier, {
         ...located_attendance_record,
-        lecture_status_array: new Array(lecture_data_object.lecture_duration_value).fill(applied_status_value)
+        lecture_status_array: new Array(lecture_data_object.lecture_duration_value).fill(applied_status_value),
+        attendance_type,
       }, { merge: true });
     }
   });
@@ -2287,6 +2433,14 @@ document.getElementById('settings_form').addEventListener('submit', form_submit_
 });
 
 window.open_interface_modal = function (target_modal_identifier_string) {
+  if (target_modal_identifier_string === 'weekly_slot_modal') {
+    document.getElementById('slot_attendance_type_selection').value = 'Lecture';
+    window.update_slot_attendance_type_visibility();
+  }
+  if (target_modal_identifier_string === 'extra_class_modal') {
+    document.getElementById('extra_attendance_type_selection').value = 'Lecture';
+    window.update_extra_attendance_type_visibility();
+  }
   document
     .getElementById(target_modal_identifier_string)
     .classList.add('active');

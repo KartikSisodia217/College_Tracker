@@ -200,6 +200,7 @@
             placeholder="e.g. MA101"></div>
         <div class="form-group"><label>Target Attendance %</label><input type="number" id="subject_target_input" min="1"
             max="100" required value="75"></div>
+        <div class="form-group subject-lab-option"><label class="checkbox-label"><input type="checkbox" id="subject_has_lab_input"> This subject has Lab(s)</label></div>
         <div class="form-group"><label>Subject Color</label>
           <div class="color-picker" id="color_selection_container"></div><input type="hidden" id="subject_color_input"
             required>
@@ -214,7 +215,8 @@
     <div class="modal-box">
       <div class="modal-title">Add Weekly Slot</div>
       <form id="weekly_slot_form">
-        <div class="form-group"><label>Subject</label><select id="slot_subject_selection" required></select></div>
+        <div class="form-group"><label>Subject</label><select id="slot_subject_selection" required onchange="update_slot_attendance_type_visibility()"></select></div>
+        <div class="form-group hidden" id="slot_attendance_type_group"><label>Attendance Type</label><select id="slot_attendance_type_selection"><option value="Lecture">Lecture</option><option value="Lab">Lab</option></select></div>
         <div class="form-group">
           <label>Day</label>
           <select id="slot_day_selection" required>
@@ -254,7 +256,8 @@
     <div class="modal-box">
       <div class="modal-title">Add Extra Class</div>
       <form id="extra_class_input_form">
-        <div class="form-group"><label>Subject</label><select id="extra_subject_selection" required></select></div>
+        <div class="form-group"><label>Subject</label><select id="extra_subject_selection" required onchange="update_extra_attendance_type_visibility()"></select></div>
+        <div class="form-group hidden" id="extra_attendance_type_group"><label>Attendance Type</label><select id="extra_attendance_type_selection"><option value="Lecture">Lecture</option><option value="Lab">Lab</option></select></div>
         <div class="form-group"><label>Date</label><input type="date" id="extra_date_selection" required></div>
         <div class="form-group">
           <label>Start Time (24h)</label>
