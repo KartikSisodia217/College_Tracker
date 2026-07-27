@@ -860,7 +860,9 @@ body {
   .sidebar.collapsed .target-text-output,
   .sidebar.collapsed .edit-btn,
   .sidebar.collapsed .delete-btn,
-  .sidebar.collapsed .module-switcher-container {
+  .sidebar.collapsed .module-switcher-container,
+  .sidebar.collapsed .lab-details,
+  .sidebar.collapsed .lab-details-toggle {
     display: none !important;
   }
 
